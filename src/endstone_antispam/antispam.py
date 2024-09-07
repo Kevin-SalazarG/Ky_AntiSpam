@@ -28,10 +28,11 @@ class AntiSpam(Plugin):
         config_path = os.path.join(self.data_folder, self.config_file)
         if not os.path.exists(config_path):
             default_config = {
-                "blocked_words": ["fuck", "nigga"],
+                "blocked_words": ["fuck", "nigga", "horion.download"],
                 "message_delay": 0.5,
                 "max_caps": 3,
-                "max_warns": 3
+                "max_warns": 3,
+                "kick_message": "You have been kicked for receiving too many warnings!"
             }
             os.makedirs(self.data_folder, exist_ok=True)
             with open(config_path, "w") as config_file:
@@ -48,18 +49,18 @@ class AntiSpam(Plugin):
     @event_handler
     def on_player_chat(self, event: PlayerChatEvent):
         player = event.player
-        xuid = player.xuid
+        unique_id = player.unique_id
 
         message = event.message
         self.logger.info(f"{player.name}: {message}")
 
-        last_message = self.player_last_message.get(xuid)
+        last_message = self.player_last_message.get(unique_id)
         if last_message and message == last_message:
             self.warn_player(player, "You cannot send the same message twice!")
             event.cancelled = True
             return
 
-        last_time = self.player_last_time.get(xuid, 0)
+        last_time = self.player_last_time.get(unique_id, 0)
         if time.time() - last_time < self.config["message_delay"]:
             self.warn_player(player, "You are sending messages too quickly!")
             event.cancelled = True
@@ -74,8 +75,8 @@ class AntiSpam(Plugin):
             event.cancelled = True
             return
 
-        self.player_last_message[xuid] = message
-        self.player_last_time[xuid] = time.time()
+        self.player_last_message[unique_id] = message
+        self.player_last_time[unique_id] = time.time()
 
     def reduce_caps(self, message: str) -> str:
         caps_count = 0
@@ -89,13 +90,14 @@ class AntiSpam(Plugin):
         return ''.join(new_message)
 
     def warn_player(self, player, reason: str) -> None:
-        xuid = player.xuid
+        unique_id = player.unique_id
         max_warns = self.config.get("max_warns", 3)
-        warns = self.player_warnings.get(xuid, 0) + 1
-        self.player_warnings[xuid] = warns
+        warns = self.player_warnings.get(unique_id, 0) + 1
+        self.player_warnings[unique_id] = warns
         player.send_message(f"{ColorFormat.YELLOW} Warning {warns}/{max_warns}: {reason}")
 
         if warns >= max_warns:
-            player.kick(f"{ColorFormat.RED} You have been kicked for receiving too many warnings!")
+            kick_message = self.config.get("kick_message", "You have been kicked for receiving too many warnings!")
+            player.kick(kick_message)
             self.logger.info(f"{player.name} was kicked for exceeding warnings.")
-            self.player_warnings[xuid] = 0
+            self.player_warnings[unique_id] = 0
