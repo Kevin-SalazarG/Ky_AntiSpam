@@ -5,24 +5,69 @@ import time
 import os
 import tomllib
 import tomlkit
-
+from endstone_antispam.commands.mute import MuteCommand
+from endstone_antispam.commands.unmute import UnMuteCommand
+from endstone_antispam.commands.mutelist import MuteListCommand
+from endstone_antispam.commands.globalmute import GlobalMuteCommand
+from endstone_antispam.mutemanager import MuteManager
 
 class AntiSpam(Plugin):
     api_version = "0.5"
     config_file = "config.toml"
     config = {}
 
-    player_last_message = {}
-    player_last_time = {}
-    player_warnings = {}
+    commands = {
+        "mute": {
+            "description": "Mutes a player for a specified duration.",
+            "usages": ["/mute <player: player> <duration: int> <reason: message>"],
+            "permissions": ["antispam.command.mute"]
+        },
+        "unmute": {
+            "description": "Unmutes a player.",
+            "usages": ["/unmute <player: player>"],
+            "permissions": ["antispam.command.unmute"]
+        },
+        "mutelist": {
+            "description": "Lists all currently muted players.",
+            "usages": ["/mutelist"],
+            "permissions": ["antispam.command.mutelist"]
+        },
+        "globalmute": {
+            "description": "Toggles global mute for the entire server.",
+            "usages": ["/globalmute"],
+            "permissions": ["antispam.command.globalmute"]
+        }
+    }
+
+    permissions = {
+        "antispam.command.mute": {
+            "description": "Allow users to use the /mute command.",
+            "default": True,
+        },
+        "antispam.command.globalmute": {
+            "description": "Allow users to use the /globalmute command.",
+            "default": True,
+        }
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.mute_manager = MuteManager()
+        self.player_last_message = {}
+        self.player_last_time = {}
+        self.player_warnings = {}
 
     def on_enable(self) -> None:
         self.load_config()
         self.register_events(self)
-        self.logger.info(f"{ColorFormat.GREEN} AntiSpam enabled!")
+        self.get_command("mute").executor = MuteCommand(self.mute_manager)
+        self.get_command("unmute").executor = UnMuteCommand(self.mute_manager)
+        self.get_command("mutelist").executor = MuteListCommand(self.mute_manager)
+        self.get_command("globalmute").executor = GlobalMuteCommand(self.mute_manager)
+        self.logger.info(f"{ColorFormat.GREEN}Ky_AntiSpam enabled!")
 
     def on_disable(self) -> None:
-        self.logger.info(f"{ColorFormat.RED} AntiSpam disabled.")
+        self.logger.info(f"{ColorFormat.RED}Ky_AntiSpam disabled.")
 
     def load_config(self) -> None:
         config_path = os.path.join(self.data_folder, self.config_file)
@@ -40,43 +85,67 @@ class AntiSpam(Plugin):
                 config_data.update(default_config)
                 config_file.write(tomlkit.dumps(config_data))
             self.config = default_config
-            self.logger.info(f"{ColorFormat.YELLOW} Default config created at {config_path}")
         else:
             with open(config_path, "rb") as config_file:
                 self.config = tomllib.load(config_file)
-            self.logger.info(f"{ColorFormat.YELLOW} Config loaded from {config_path}")
 
     @event_handler
     def on_player_chat(self, event: PlayerChatEvent):
         player = event.player
-        xuid = player.xuid
+        unique_id = player.unique_id
+
+        if self.mute_manager.isGlobalMuteActive() and not player.has_permission("antispam.message.globalmute"):
+            player.send_message(f"{ColorFormat.RED} The server is in global mute. You cannot chat at this time.")
+            event.cancelled = True
+            return
+
+        if self.mute_manager.isPlayerMuted(unique_id):
+            mute_info = self.mute_manager.getMuteInfo(unique_id)
+            remaining_time = mute_info["remaining_time"]
+            player.send_message(f"{ColorFormat.RED} You are muted. You can speak again in {int(remaining_time)} seconds.")
+            event.cancelled = True
+            return
+
+        if player.has_permission("antispam.message.bypass"):
+            return
 
         message = event.message
-        self.logger.info(f"{player.name}: {message}")
 
-        last_message = self.player_last_message.get(xuid)
-        if last_message and message == last_message:
+        if self.is_duplicate_message(unique_id, message):
             self.warn_player(player, "You cannot send the same message twice!")
             event.cancelled = True
             return
 
-        last_time = self.player_last_time.get(xuid, 0)
-        if time.time() - last_time < self.config["message_delay"]:
+        if self.is_too_quick(unique_id):
             self.warn_player(player, "You are sending messages too quickly!")
             event.cancelled = True
             return
 
-        if sum(1 for c in message if c.isupper()) > self.config["max_caps"]:
+        if self.has_too_many_caps(message):
             event.message = self.reduce_caps(message)
             self.warn_player(player, "Your message has too many capital letters.")
 
-        if any(bad_word in message.lower() for bad_word in self.config["blocked_words"]):
+        if self.contains_blocked_words(message):
             self.warn_player(player, "Your message contains blocked words!")
             event.cancelled = True
             return
 
-        self.player_last_message[xuid] = message
-        self.player_last_time[xuid] = time.time()
+        self.player_last_message[unique_id] = message
+        self.player_last_time[unique_id] = time.time()
+
+    def is_duplicate_message(self, unique_id, message):
+        last_message = self.player_last_message.get(unique_id)
+        return last_message and message == last_message
+
+    def is_too_quick(self, unique_id):
+        last_time = self.player_last_time.get(unique_id, 0)
+        return time.time() - last_time < self.config["message_delay"]
+
+    def has_too_many_caps(self, message):
+        return sum(1 for c in message if c.isupper()) > self.config["max_caps"]
+
+    def contains_blocked_words(self, message):
+        return any(bad_word in message.lower() for bad_word in self.config["blocked_words"])
 
     def reduce_caps(self, message: str) -> str:
         caps_count = 0
@@ -90,14 +159,14 @@ class AntiSpam(Plugin):
         return ''.join(new_message)
 
     def warn_player(self, player, reason: str) -> None:
-        xuid = player.xuid
+        unique_id = player.unique_id
         max_warns = self.config.get("max_warns", 3)
-        warns = self.player_warnings.get(xuid, 0) + 1
-        self.player_warnings[xuid] = warns
+        warns = self.player_warnings.get(unique_id, 0) + 1
+        self.player_warnings[unique_id] = warns
         player.send_message(f"{ColorFormat.YELLOW} Warning {warns}/{max_warns}: {reason}")
 
         if warns >= max_warns:
             kick_message = self.config.get("kick_message", "You have been kicked for receiving too many warnings!")
             player.kick(kick_message)
             self.logger.info(f"{player.name} was kicked for exceeding warnings.")
-            self.player_warnings[xuid] = 0
+            self.player_warnings[unique_id] = 0
