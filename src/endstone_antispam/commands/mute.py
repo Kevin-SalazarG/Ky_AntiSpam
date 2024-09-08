@@ -39,15 +39,15 @@ class MuteCommand(CommandExecutor):
             return False
 
         reason = "No reason provided" if len(args) < 3 else ' '.join(args[2:])
-        current_mute_info = self.mute_manager.getMuteInfo(target.unique_id)
+        current_mute_info = self.mute_manager.getMuteInfo(target.name)
 
         if current_mute_info:
             new_duration = max(duration, current_mute_info["remaining_time"])
-            self.mute_manager.mutePlayer(target.unique_id, new_duration, reason)
+            self.mute_manager.mutePlayer(target.name, new_duration, reason)
             sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}is already muted. Duration updated to {ColorFormat.WHITE}{new_duration} {ColorFormat.GREEN}seconds.")
             target.send_message(f"{ColorFormat.RED}Your mute has been updated. New duration: {ColorFormat.WHITE}{new_duration} {ColorFormat.RED}seconds. Reason: {ColorFormat.WHITE}{reason}")
         else:
-            self.mute_manager.mutePlayer(target.unique_id, duration, reason)
+            self.mute_manager.mutePlayer(target.name, duration, reason)
             sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}has been muted for {ColorFormat.WHITE}{duration} {ColorFormat.GREEN}seconds.")
             target.send_message(f"{ColorFormat.RED}You have been muted for {ColorFormat.WHITE}{duration} {ColorFormat.RED}seconds. Reason: {ColorFormat.WHITE}{reason}")
 

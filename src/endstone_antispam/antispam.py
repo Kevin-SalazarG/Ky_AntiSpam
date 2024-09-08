@@ -42,11 +42,19 @@ class AntiSpam(Plugin):
     permissions = {
         "antispam.command.mute": {
             "description": "Allow users to use the /mute command.",
-            "default": True,
+            "default": False,
+        },
+        "antispam.command.unmute": {
+            "description": "Unmutes a player.",
+            "default": False,
+        },
+        "antispam.command.mutelist": {
+            "description": "Lists all currently muted players.",
+            "default": False,
         },
         "antispam.command.globalmute": {
             "description": "Allow users to use the /globalmute command.",
-            "default": True,
+            "default": False,
         }
     }
 
@@ -92,15 +100,15 @@ class AntiSpam(Plugin):
     @event_handler
     def on_player_chat(self, event: PlayerChatEvent):
         player = event.player
-        unique_id = player.unique_id
+        name = player.name
 
         if self.mute_manager.isGlobalMuteActive() and not player.has_permission("antispam.message.globalmute"):
             player.send_message(f"{ColorFormat.RED} The server is in global mute. You cannot chat at this time.")
             event.cancelled = True
             return
 
-        if self.mute_manager.isPlayerMuted(unique_id):
-            mute_info = self.mute_manager.getMuteInfo(unique_id)
+        if self.mute_manager.isPlayerMuted(name):
+            mute_info = self.mute_manager.getMuteInfo(name)
             remaining_time = mute_info["remaining_time"]
             player.send_message(f"{ColorFormat.RED} You are muted. You can speak again in {int(remaining_time)} seconds.")
             event.cancelled = True
@@ -111,12 +119,12 @@ class AntiSpam(Plugin):
 
         message = event.message
 
-        if self.is_duplicate_message(unique_id, message):
+        if self.is_duplicate_message(name, message):
             self.warn_player(player, "You cannot send the same message twice!")
             event.cancelled = True
             return
 
-        if self.is_too_quick(unique_id):
+        if self.is_too_quick(name):
             self.warn_player(player, "You are sending messages too quickly!")
             event.cancelled = True
             return
@@ -130,15 +138,15 @@ class AntiSpam(Plugin):
             event.cancelled = True
             return
 
-        self.player_last_message[unique_id] = message
-        self.player_last_time[unique_id] = time.time()
+        self.player_last_message[name] = message
+        self.player_last_time[name] = time.time()
 
-    def is_duplicate_message(self, unique_id, message):
-        last_message = self.player_last_message.get(unique_id)
+    def is_duplicate_message(self, name, message):
+        last_message = self.player_last_message.get(name)
         return last_message and message == last_message
 
-    def is_too_quick(self, unique_id):
-        last_time = self.player_last_time.get(unique_id, 0)
+    def is_too_quick(self, name):
+        last_time = self.player_last_time.get(name, 0)
         return time.time() - last_time < self.config["message_delay"]
 
     def has_too_many_caps(self, message):
@@ -159,14 +167,14 @@ class AntiSpam(Plugin):
         return ''.join(new_message)
 
     def warn_player(self, player, reason: str) -> None:
-        unique_id = player.unique_id
+        name = player.name
         max_warns = self.config.get("max_warns", 3)
-        warns = self.player_warnings.get(unique_id, 0) + 1
-        self.player_warnings[unique_id] = warns
+        warns = self.player_warnings.get(name, 0) + 1
+        self.player_warnings[name] = warns
         player.send_message(f"{ColorFormat.YELLOW} Warning {warns}/{max_warns}: {reason}")
 
         if warns >= max_warns:
             kick_message = self.config.get("kick_message", "You have been kicked for receiving too many warnings!")
             player.kick(kick_message)
             self.logger.info(f"{player.name} was kicked for exceeding warnings.")
-            self.player_warnings[unique_id] = 0
+            self.player_warnings[name] = 0

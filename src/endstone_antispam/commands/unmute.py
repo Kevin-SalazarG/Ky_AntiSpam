@@ -26,7 +26,7 @@ class UnMuteCommand(CommandExecutor):
             sender.send_error_message("You cannot unmute yourself.")
             return False
 
-        if self.mute_manager.unmutePlayer(target.unique_id):
+        if self.mute_manager.unmutePlayer(target.name):
             sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}has been unmuted.")
             target.send_message(f"{ColorFormat.GREEN}You have been unmuted. You can now chat again.")
         else:

@@ -19,8 +19,8 @@ class MuteListCommand(CommandExecutor):
             return True
 
         message = f"{ColorFormat.GREEN}List of muted players:"
-        for unique_id, mute_info in muted_players.items():
-            player_name = sender.server.get_player(unique_id).name
+        for name, mute_info in muted_players.items():
+            player_name = sender.server.get_player(name).name
             remaining_time = int(mute_info["remaining_time"])
             reason = mute_info.get("reason", "No reason provided")
             message += f"\n{ColorFormat.WHITE}{player_name} - {ColorFormat.RED}{remaining_time} seconds - Reason: {ColorFormat.WHITE}{reason}"
