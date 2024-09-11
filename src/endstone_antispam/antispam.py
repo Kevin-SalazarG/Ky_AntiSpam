@@ -1,5 +1,5 @@
 from endstone import ColorFormat
-from endstone.event import event_handler, PlayerChatEvent
+from endstone.event import event_handler, PlayerChatEvent, PlayerQuitEvent
 from endstone.plugin import Plugin
 import time
 import os
@@ -207,3 +207,9 @@ class AntiSpam(Plugin):
             player.kick(kick_message)
             self.logger.info(f"{player.name} was kicked for exceeding warnings.")
             self.player_data.pop(name, None)
+
+    @event_handler
+    def on_player_quit(self, event: PlayerQuitEvent):
+        player = event.player
+
+        self.player_data.pop(player.name, None)
