@@ -12,6 +12,7 @@ message_delay = 0.5   # Minimum time (in seconds) between messages from the same
 max_caps = 3          # Maximum number of capital letters allowed per message.
 max_warns = 3         # Maximum number of warnings before a player is kicked.
 kick_message = "You have been kicked for receiving too many warnings!"   # Message shown when a player is kicked for exceeding warnings.
+max_message_length = 100   # Maximum number of characters allowed in a message.
 ```
 
 ## Features

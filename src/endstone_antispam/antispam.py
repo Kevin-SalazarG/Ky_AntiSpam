@@ -23,7 +23,7 @@ class AntiSpam(Plugin):
     commands = {
         "mute": {
             "description": "Mutes a player for a specified duration.",
-            "usages": ["/mute <player: player> <duration: int> <reason: message>"],
+            "usages": ["/mute <player: player> <duration: str> <reason: message>"],
             "permissions": ["antispam.command.mute"]
         },
         "unmute": {
@@ -102,7 +102,8 @@ class AntiSpam(Plugin):
             "message_delay": 0.5,
             "max_caps": 3,
             "max_warns": 3,
-            "kick_message": "You have been kicked for receiving too many warnings!"
+            "kick_message": "You have been kicked for receiving too many warnings!",
+            "max_message_length": 100
         }
         os.makedirs(self.data_folder, exist_ok=True)
         with open(config_path, "w") as config_file:
@@ -124,13 +125,18 @@ class AntiSpam(Plugin):
 
         message = event.message
 
+        if len(message) > self.config["max_message_length"]:
+            self.warn_player(player, f"{ColorFormat.RED} Your message is too long! Maximum length is {self.config['max_message_length']} characters.")
+            event.cancelled = True
+            return
+
         if self.check_message_violations(player, name, message):
             event.cancelled = True
             return
 
         if self.has_too_many_caps(message):
             event.message = self.reduce_caps(message)
-            self.warn_player(player, "Your message has too many capital letters.")
+            self.warn_player(player, f"{ColorFormat.RED} Your message has too many capital letters.")
 
         self.update_player_stats(name, message)
 
@@ -143,7 +149,7 @@ class AntiSpam(Plugin):
         if self.mute_manager.isPlayerMuted(player.name):
             mute_info = self.mute_manager.getMuteInfo(player.name)
             remaining_time = mute_info["remaining_time"]
-            player.send_message(f"{ColorFormat.RED} You are muted. You can speak again in {int(remaining_time)} seconds.")
+            player.send_message(f"{ColorFormat.RED} You are muted. You can speak again in {remaining_time}.")
             event.cancelled = True
             return True
 
@@ -155,15 +161,15 @@ class AntiSpam(Plugin):
         last_time = player_data["last_time"]
 
         if last_message == message:
-            self.warn_player(player, "You cannot send the same message twice!")
+            self.warn_player(player, f"{ColorFormat.RED} You cannot send the same message twice!")
             return True
 
         if time.monotonic() - last_time < self.config["message_delay"]:
-            self.warn_player(player, "You are sending messages too quickly!")
+            self.warn_player(player, f"{ColorFormat.RED} You are sending messages too quickly!")
             return True
 
         if self.blocked_words_regex.search(message.lower()):
-            self.warn_player(player, "Your message contains blocked words!")
+            self.warn_player(player, f"{ColorFormat.RED} Your message contains blocked words!")
             return True
 
         return False
@@ -211,5 +217,4 @@ class AntiSpam(Plugin):
     @event_handler
     def on_player_quit(self, event: PlayerQuitEvent):
         player = event.player
-
         self.player_data.pop(player.name, None)

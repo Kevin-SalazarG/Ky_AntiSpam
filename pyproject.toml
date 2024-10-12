@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "endstone-antispam"
-version = "0.1.2"
+version = "0.1.3"
 description = "Plugin AntiSpam"
 author = "Kyel0"
 dependencies = [

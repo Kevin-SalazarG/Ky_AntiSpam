@@ -1,5 +1,8 @@
+import re
 from endstone import Player, ColorFormat
 from endstone.command import CommandExecutor, CommandSender, Command
+
+duration_pattern = re.compile(r"^\d+[smhd]$")
 
 
 class MuteCommand(CommandExecutor):
@@ -13,7 +16,7 @@ class MuteCommand(CommandExecutor):
             return False
 
         if len(args) < 2:
-            sender.send_error_message("Usage: /mute <player: player> <duration: int> <reason: message>")
+            sender.send_error_message("Usage: /mute <player: player> <duration: str> <reason: message>")
             return False
 
         player_name = args[0].strip('"')
@@ -29,26 +32,24 @@ class MuteCommand(CommandExecutor):
             sender.send_error_message("You cannot mute yourself.")
             return False
 
-        try:
-            duration = int(args[1])
-            if duration <= 0:
-                sender.send_error_message("Duration must be a positive number.")
-                return False
-        except ValueError:
-            sender.send_error_message("Invalid duration. It must be a valid number in seconds.")
+        duration = args[1]
+
+        if not duration_pattern.match(duration):
+            sender.send_error_message("Invalid duration format. Use something like 1s, 2m, 3h, or 4d.")
             return False
 
+        time_value = duration
         reason = "No reason provided" if len(args) < 3 else ' '.join(args[2:])
         current_mute_info = self.mute_manager.getMuteInfo(target.name)
 
         if current_mute_info:
-            new_duration = max(duration, current_mute_info["remaining_time"])
+            new_duration = max(time_value, current_mute_info["remaining_time"])
             self.mute_manager.mutePlayer(target.name, new_duration, reason)
             sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}is already muted. Duration updated to {ColorFormat.WHITE}{new_duration} {ColorFormat.GREEN}seconds.")
             target.send_message(f"{ColorFormat.RED}Your mute has been updated. New duration: {ColorFormat.WHITE}{new_duration} {ColorFormat.RED}seconds. Reason: {ColorFormat.WHITE}{reason}")
         else:
-            self.mute_manager.mutePlayer(target.name, duration, reason)
-            sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}has been muted for {ColorFormat.WHITE}{duration} {ColorFormat.GREEN}seconds.")
-            target.send_message(f"{ColorFormat.RED}You have been muted for {ColorFormat.WHITE}{duration} {ColorFormat.RED}seconds. Reason: {ColorFormat.WHITE}{reason}")
+            self.mute_manager.mutePlayer(target.name, time_value, reason)
+            sender.send_message(f"{ColorFormat.GREEN}Player {ColorFormat.WHITE}{target.name} {ColorFormat.GREEN}has been muted for {ColorFormat.WHITE}{duration}.")
+            target.send_message(f"{ColorFormat.RED}You have been muted for {ColorFormat.WHITE}{duration}. {ColorFormat.RED}Reason: {ColorFormat.WHITE}{reason}")
 
         return True
